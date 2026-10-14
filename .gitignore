@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.adel/
+*.log
+.env
+.env.*
+!.env.example
+*.pem
+*.pfx
+*.key
+.codex/
+.agents/
+.venv/
+coverage/
+test-results/
+playwright-report/

@@ -1,0 +1,28 @@
+# CodeRabbit — revisión de PRs bajo ADEL.
+# No habilitar revisiones automáticas en borradores ni aplicar cambios sin aprobación.
+language: es-AR
+
+reviews:
+  profile: quiet
+  high_level_summary: true
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: false
+  path_instructions:
+    - path: "docs/**"
+      instructions: |
+        Revisar consistencia con docs/adel-rules.md y docs/art-direction-fidelity.md.
+        Si una tarea cambia el medio o estilo artístico aprobado del producto, exigir
+        una nueva decisión explícita; no inferir aprobación desde SVG, placeholders
+        ni pruebas puramente técnicas. Evitar observaciones cosméticas sin impacto.
+    - path: "templates/**"
+      instructions: |
+        Revisar que los templates respeten proyectos brownfield, no impongan
+        estilos visuales no autorizados y mantengan criterios de aceptación ADEL.
+        No confundir assets de prueba con assets finales aprobados.
+    - path: "**/*.ps1"
+      instructions: |
+        Priorizar compatibilidad Windows PowerShell 5.1, idempotencia, permisos
+        mínimos, seguridad, validación de rutas y preservación de cambios locales.
+        Evitar cambios destructivos o comandos de publicación automáticos.

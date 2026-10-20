@@ -4,7 +4,7 @@
 **Responsable de aprobación:** [definir]
 **Fuente de decisión aprobada:** [enlace/ruta/fecha o "no localizada"]
 
-> ADEL ART-LOCK-001: este archivo es una **plantilla**, no una autorización para elegir estética. Si es un proyecto existente, recuperar antes su Art Bible, briefs, referencias finales y últimas decisiones explícitas. No usar los activos provisionales como maestros de estilo. Ver [regla global](../../../docs/art-direction-fidelity.md) en el repositorio ADEL-Framework.
+> ADEL ART-LOCK-001: este archivo es una **plantilla**, no una autorización para elegir estética. Si es un proyecto existente, recuperar antes su Art Bible, briefs, referencias finales y últimas decisiones explícitas. No usar los activos provisionales como maestros de estilo. Ver [regla global](https://github.com/johanseb15/ADEL-Framework/blob/main/docs/art-direction-fidelity.md) en el repositorio ADEL-Framework.
 
 ## Estándar aprobado por tipo de recurso
 

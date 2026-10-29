@@ -2,6 +2,10 @@
 
 Repositorio independiente para reconstruir el entorno base de ADEL y crear proyectos React/Vite/TypeScript. No contiene credenciales, cachés de plugins ni configuración personal de Codex.
 
+## Entrega verificable y aprendizaje (ADEL-RELEASE-001)
+
+La extensión [ADEL-RELEASE-001](docs/adel-release-001.md) complementa SPEC, TDD, Superpowers y los gates actuales con una distinción entre **incremento terminado (DoD)** y **versión publicada y comprobada (DoRls)**. Es proporcional al tipo de proyecto; no impone despliegue web ni Lighthouse a herramientas que no lo requieran. Para cada publicación, copiá la [plantilla de decisión](docs/templates/release-decision.md) al repositorio del producto, conservá la evidencia y registrá el resultado de producción. Una decisión comercial puede aceptar deuda no crítica trazable, nunca falsear pruebas ni dispensar controles esenciales.
+
 ## Recuperación
 
 En PowerShell 5.1 o 7, con conexión a Internet y `winget` disponible:

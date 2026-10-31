@@ -181,5 +181,27 @@ Check 'doctor distinguishes missing project browser from hosted browser capabili
   Assert (($rows | Where-Object tool -eq 'browser').status -eq 'LIMITED') 'hosted Browser confused with Chromium'
   Assert (-not (Test-Path -LiteralPath $missing)) 'doctor wrote to missing project'
 }
+Check 'generated React project carries an actionable visual contract and agent gate' {
+  $target = Join-Path ([System.IO.Path]::GetTempPath()) ('adel-art-test-' + [guid]::NewGuid().ToString('N'))
+  try {
+    & (Join-Path $Root 'new-project.ps1') -Name 'art-test' -Path $target | Out-Null
+    $contractPath = Join-Path $target 'docs/ART-DIRECTION.md'
+    $agentPath = Join-Path $target 'AGENTS.md'
+    Assert (Test-Path -LiteralPath $contractPath) 'generated React project lacks its visual contract'
+    Assert (Test-Path -LiteralPath $agentPath) 'generated React project lacks agent instructions'
+    $contract = Get-Content -LiteralPath $contractPath -Raw -Encoding UTF8
+    $agents = Get-Content -LiteralPath $agentPath -Raw -Encoding UTF8
+    foreach ($term in @('responsable', 'fuente', 'fecha', 'medio', 'referencia', 'prohibiciones', 'prototipo', 'candidato', 'final aprobado', 'tipograf', 'legibilidad', 'responsive', 'accesibilidad', 'coherencia')) {
+      Assert ($contract -match $term) "visual contract lacks $term"
+    }
+    Assert ($contract -match 'QA t.cnico' -and $contract -match 'aprobaci.n art.stica') 'technical QA and human art approval are not separate'
+    Assert ($agents -match 'docs/ART-DIRECTION.md') 'agents do not read the project contract'
+    Assert ($agents -match 'placeholder' -and $agents -match 'final aprobado') 'agents do not distinguish provisional and approved art'
+    Assert ($agents -match 'responsable' -and $agents -match 'aprobaci.n') 'agent approval authority is unclear'
+  } finally {
+    $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
+    if ($target.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $target)) { Remove-Item -LiteralPath $target -Recurse -Force }
+  }
+}
 if ($failed) { exit 1 }
 Write-Host 'All tests passed.'

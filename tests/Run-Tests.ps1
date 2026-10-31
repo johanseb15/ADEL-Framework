@@ -2,9 +2,34 @@ param([string]$Root = (Split-Path $PSScriptRoot -Parent))
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $Root 'lib/ADEL.psm1') -Force
 $failed = 0
+$passed = 0
+$blocked = 0
+$skipped = 0
 function Check($name, [scriptblock]$body) {
-  try { & $body; Write-Host "PASS $name" }
+  try {
+    $emitted = @(& $body)
+    $outcome = $null
+    foreach ($result in $emitted) {
+      if ($result -is [hashtable] -and @('FAIL', 'BLOCKED', 'SKIP') -contains $result.Status) { $outcome = $result }
+      else { Write-Output $result }
+    }
+    if ($outcome) {
+      switch ($outcome.Status) {
+        'FAIL' { $script:failed++ }
+        'BLOCKED' { $script:blocked++ }
+        'SKIP' { $script:skipped++ }
+      }
+      Write-Host "$($outcome.Status) $name`: $($outcome.Reason)"
+    } else {
+      $script:passed++
+      Write-Host "PASS $name"
+    }
+  }
   catch { $script:failed++; Write-Host "FAIL $name`: $_" }
+}
+function Omit-Check($reason, [bool]$required) {
+  if ($required) { return @{ Status = 'BLOCKED'; Reason = $reason } }
+  return @{ Status = 'SKIP'; Reason = $reason }
 }
 function Assert($condition, $message) { if (-not $condition) { throw $message } }
 $manifest = Get-AdelManifest (Join-Path $Root 'adel.tools.json')
@@ -23,6 +48,13 @@ Check 'versions are compared numerically' {
   Assert ((Compare-AdelVersion 'v24.19.0' '24.15.0') -ge 0) 'new version rejected'
   Assert ((Compare-AdelVersion '2.9.0' '2.10.0') -lt 0) 'lexical comparison used'
 }
+Check 'Codex versions respect manifest minimum' {
+  $minimum = $manifest.tools.codex.minimum
+  Assert ((Compare-AdelVersion '0.164.0' $minimum) -ge 0) 'compatible Codex version rejected'
+  Assert ((Compare-AdelVersion '0.156.0' $minimum) -lt 0) 'inferior Codex version accepted'
+  Assert ((Compare-AdelVersion 'invalid' $minimum) -lt 0) 'invalid Codex version accepted'
+  Assert ((Compare-AdelVersion $null $minimum) -lt 0) 'absent Codex version accepted'
+}
 Check 'doctor distinguishes available limited missing' {
   $probe = @{ git = '2.55.0'; node = '24.19.0'; pnpm = '10.0.0' }
   $result = Get-AdelStatuses $manifest 'minimal' $probe
@@ -30,11 +62,17 @@ Check 'doctor distinguishes available limited missing' {
   Assert ($result.pnpm.status -eq 'LIMITED') 'pnpm wrong'
   Assert ($result.codex.status -eq 'UNAVAILABLE') 'codex wrong'
 }
-Check 'real probe captures version of commands that exit successfully' {
+Check 'real probe captures version of available commands that exit successfully' {
   $probe = Get-AdelProbe $manifest (Join-Path ([System.IO.Path]::GetTempPath()) 'adel-test-probe')
   Assert ($probe.node -match '24\.') 'node version not captured'
   Assert ($probe.pnpm -match '11\.') 'pnpm version not captured'
-  Assert ($probe.codex -match '0\.157\.') 'codex version not captured despite executable'
+  if (Get-Command codex.cmd -ErrorAction SilentlyContinue) {
+    Assert ($probe.codex) 'codex version not captured despite executable'
+    Assert ((Compare-AdelVersion $probe.codex $manifest.tools.codex.minimum) -ge 0) 'codex version below manifest minimum'
+  } else {
+    # La prueba real de Codex es opcional; las comparaciones de versión anteriores siguen siendo obligatorias.
+    Omit-Check 'codex.cmd is not detectable in this environment' $false
+  }
 }
 Check 'installer plan is idempotent and WhatIf does not mutate' {
   $probe = @{ git = '2.55.0'; node = '24.19.0'; pnpm = '11.9.0'; codex = '0.157.0'; superpowers = '6.4.2' }
@@ -72,6 +110,8 @@ Check 'new project respects WhatIf and refuses overwrite' {
     Assert (-not (Test-Path -LiteralPath $target)) 'WhatIf created files'
     & (Join-Path $Root 'new-project.ps1') -Name 'sample-app' -Path $target | Out-Null
     Assert (Test-Path -LiteralPath (Join-Path $target 'src/App.tsx')) 'template missing'
+    Assert (Test-Path -LiteralPath (Join-Path $target 'pnpm-lock.yaml')) 'default lockfile missing'
+    Assert ((Get-Content -LiteralPath (Join-Path $target 'package.json') -Raw | ConvertFrom-Json).name -eq 'sample-app') 'default package name changed'
     $threw = $false
     try { & (Join-Path $Root 'new-project.ps1') -Name 'sample-app' -Path $target | Out-Null } catch { $threw = $true }
     Assert $threw 'existing project overwritten'
@@ -79,6 +119,49 @@ Check 'new project respects WhatIf and refuses overwrite' {
     $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
     if ($target.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $target)) { Remove-Item -LiteralPath $target -Recurse -Force }
   }
+}
+Check 'python CLI template is independent of the web toolchain' {
+  $target = Join-Path ([System.IO.Path]::GetTempPath()) ('adel python test ' + [guid]::NewGuid().ToString('N'))
+  try {
+    $threw = $false
+    try { & (Join-Path $Root 'new-project.ps1') -Name 'sample-cli' -Path $target -Template python-cli -InstallDependencies | Out-Null } catch { $threw = $true }
+    Assert $threw 'Python template accepted dependency installation'
+    Assert (-not (Test-Path -LiteralPath $target)) 'rejected dependency installation created files'
+    & (Join-Path $Root 'new-project.ps1') -Name 'sample-cli' -Path $target -Template python-cli -WhatIf | Out-Null
+    Assert (-not (Test-Path -LiteralPath $target)) 'Python WhatIf created files'
+    & (Join-Path $Root 'new-project.ps1') -Name 'sample-cli' -Path $target -Template python-cli | Out-Null
+    Assert (Test-Path -LiteralPath (Join-Path $target 'main.py')) 'Python entry point missing'
+    Assert (Test-Path -LiteralPath (Join-Path $target 'tests/test_main.py')) 'Python tests missing'
+    foreach ($webFile in @('package.json', 'pnpm-lock.yaml', 'vite.config.ts', 'src/App.tsx')) {
+      Assert (-not (Test-Path -LiteralPath (Join-Path $target $webFile))) "Web artifact copied: $webFile"
+    }
+    $python = Get-Command python.exe, py.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($python) {
+      Push-Location $target
+      try {
+        if ($python.Name -eq 'py.exe') { & $python.Source -3 -m unittest discover -s tests }
+        else { & $python.Source -m unittest discover -s tests }
+        Assert ($LASTEXITCODE -eq 0) 'generated Python tests failed'
+      } finally { Pop-Location }
+    } else {
+      # Ejecutar los tests generados de Python es obligatorio para verificar esta plantilla.
+      Omit-Check 'Python interpreter is unavailable' $true
+    }
+    $threw = $false
+    try { & (Join-Path $Root 'new-project.ps1') -Name 'sample-cli' -Path $target -Template python-cli | Out-Null } catch { $threw = $true }
+    Assert $threw 'existing Python project overwritten'
+  } finally {
+    $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
+    if ($target.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $target)) { Remove-Item -LiteralPath $target -Recurse -Force }
+  }
+}
+Check 'unknown project template is rejected before creating a destination' {
+  $target = Join-Path ([System.IO.Path]::GetTempPath()) ('adel-unknown-test-' + [guid]::NewGuid().ToString('N'))
+  $threw = $false
+  try { & (Join-Path $Root 'new-project.ps1') -Name 'sample-cli' -Path $target -Template unknown | Out-Null }
+  catch { $threw = $_.Exception.Message -match 'ValidateSet|validation|validación|does not belong to the set' }
+  Assert $threw 'unknown template accepted'
+  Assert (-not (Test-Path -LiteralPath $target)) 'unknown template created destination'
 }
 Check 'visual sources are pinned and isolated from minimal' {
   $visual = Get-AdelProfile $manifest 'visual-game'
@@ -125,5 +208,27 @@ Check 'doctor distinguishes missing project browser from hosted browser capabili
   Assert (($rows | Where-Object tool -eq 'browser').status -eq 'LIMITED') 'hosted Browser confused with Chromium'
   Assert (-not (Test-Path -LiteralPath $missing)) 'doctor wrote to missing project'
 }
-if ($failed) { exit 1 }
-Write-Host 'All tests passed.'
+Check 'generated React project carries an actionable visual contract and agent gate' {
+  $target = Join-Path ([System.IO.Path]::GetTempPath()) ('adel-art-test-' + [guid]::NewGuid().ToString('N'))
+  try {
+    & (Join-Path $Root 'new-project.ps1') -Name 'art-test' -Path $target | Out-Null
+    $contractPath = Join-Path $target 'docs/ART-DIRECTION.md'
+    $agentPath = Join-Path $target 'AGENTS.md'
+    Assert (Test-Path -LiteralPath $contractPath) 'generated React project lacks its visual contract'
+    Assert (Test-Path -LiteralPath $agentPath) 'generated React project lacks agent instructions'
+    $contract = Get-Content -LiteralPath $contractPath -Raw -Encoding UTF8
+    $agents = Get-Content -LiteralPath $agentPath -Raw -Encoding UTF8
+    foreach ($term in @('responsable', 'fuente', 'fecha', 'medio', 'referencia', 'prohibiciones', 'prototipo', 'candidato', 'final aprobado', 'tipograf', 'legibilidad', 'responsive', 'accesibilidad', 'coherencia')) {
+      Assert ($contract -match $term) "visual contract lacks $term"
+    }
+    Assert ($contract -match 'QA t.cnico' -and $contract -match 'aprobaci.n art.stica') 'technical QA and human art approval are not separate'
+    Assert ($agents -match 'docs/ART-DIRECTION.md') 'agents do not read the project contract'
+    Assert ($agents -match 'placeholder' -and $agents -match 'final aprobado') 'agents do not distinguish provisional and approved art'
+    Assert ($agents -match 'responsable' -and $agents -match 'aprobaci.n') 'agent approval authority is unclear'
+  } finally {
+    $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
+    if ($target.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $target)) { Remove-Item -LiteralPath $target -Recurse -Force }
+  }
+}
+Write-Host "Results: PASS=$passed FAIL=$failed BLOCKED=$blocked SKIP=$skipped"
+if ($failed -or $blocked) { exit 1 }

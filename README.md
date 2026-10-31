@@ -6,6 +6,10 @@ Repositorio independiente para reconstruir el entorno base de ADEL y crear proye
 
 La extensión [ADEL-RELEASE-001](docs/adel-release-001.md) complementa SPEC, TDD, Superpowers y los gates actuales con una distinción entre **incremento terminado (DoD)** y **versión publicada y comprobada (DoRls)**. Es proporcional al tipo de proyecto; no impone despliegue web ni Lighthouse a herramientas que no lo requieran. Para cada publicación, copiá la [plantilla de decisión](docs/templates/release-decision.md) al repositorio del producto, conservá la evidencia y registrá el resultado de producción. Una decisión comercial puede aceptar deuda no crítica trazable, nunca falsear pruebas ni dispensar controles esenciales.
 
+## Dirección artística y calidad de diseño (ADEL-EVO-003)
+
+Los proyectos React generados incluyen [un contrato visual propio](templates/react-vite-ts/docs/ART-DIRECTION.md) e [instrucciones para agentes](templates/react-vite-ts/AGENTS.md). Completá el contrato con las decisiones y referencias aprobadas del producto antes de promover arte. La [regla transversal](docs/art-direction-fidelity.md) separa QA técnico de aprobación artística humana y exige revisar tipografía, legibilidad, responsive, accesibilidad y coherencia según el producto. No impone herramientas pagas ni requisitos visuales a `python-cli`.
+
 ## Recuperación
 
 En PowerShell 5.1 o 7, con conexión a Internet y `winget` disponible:
@@ -42,7 +46,21 @@ pnpm.cmd run test:run
 pnpm.cmd run build
 ```
 
-El generador se niega a sobrescribir una carpeta existente. `-InstallDependencies` instala solo las dependencias del nuevo proyecto. Para el perfil visual:
+El generador se niega a sobrescribir una carpeta existente. `-InstallDependencies` instala solo las dependencias del nuevo proyecto.
+
+Para crear una herramienta de línea de comandos con Python 3 y solo su biblioteca estándar, seleccioná la plantilla explícitamente:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\new-project.ps1 -Name demo-cli -Path ..\demo-cli -Template python-cli -WhatIf
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\new-project.ps1 -Name demo-cli -Path ..\demo-cli -Template python-cli
+cd ..\demo-cli
+python main.py Ada
+python -m unittest discover -s tests
+```
+
+Sin `-Template`, el generador conserva la plantilla React/Vite/TypeScript. Los identificadores admitidos son `react-vite-ts` y `python-cli`; un identificador desconocido se rechaza. `python-cli` no requiere instalación de dependencias y rechaza `-InstallDependencies`.
+
+Para el perfil visual:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\bootstrap.ps1 -Profile visual-game -WhatIf

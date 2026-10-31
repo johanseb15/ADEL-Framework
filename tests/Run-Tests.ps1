@@ -2,9 +2,34 @@ param([string]$Root = (Split-Path $PSScriptRoot -Parent))
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $Root 'lib/ADEL.psm1') -Force
 $failed = 0
+$passed = 0
+$blocked = 0
+$skipped = 0
 function Check($name, [scriptblock]$body) {
-  try { & $body; Write-Host "PASS $name" }
+  try {
+    $emitted = @(& $body)
+    $outcome = $null
+    foreach ($result in $emitted) {
+      if ($result -is [hashtable] -and @('FAIL', 'BLOCKED', 'SKIP') -contains $result.Status) { $outcome = $result }
+      else { Write-Output $result }
+    }
+    if ($outcome) {
+      switch ($outcome.Status) {
+        'FAIL' { $script:failed++ }
+        'BLOCKED' { $script:blocked++ }
+        'SKIP' { $script:skipped++ }
+      }
+      Write-Host "$($outcome.Status) $name`: $($outcome.Reason)"
+    } else {
+      $script:passed++
+      Write-Host "PASS $name"
+    }
+  }
   catch { $script:failed++; Write-Host "FAIL $name`: $_" }
+}
+function Omit-Check($reason, [bool]$required) {
+  if ($required) { return @{ Status = 'BLOCKED'; Reason = $reason } }
+  return @{ Status = 'SKIP'; Reason = $reason }
 }
 function Assert($condition, $message) { if (-not $condition) { throw $message } }
 $manifest = Get-AdelManifest (Join-Path $Root 'adel.tools.json')
@@ -45,7 +70,8 @@ Check 'real probe captures version of available commands that exit successfully'
     Assert ($probe.codex) 'codex version not captured despite executable'
     Assert ((Compare-AdelVersion $probe.codex $manifest.tools.codex.minimum) -ge 0) 'codex version below manifest minimum'
   } else {
-    Write-Host 'SKIP real Codex probe: codex.cmd is not detectable in this environment'
+    # La prueba real de Codex es opcional; las comparaciones de versión anteriores siguen siendo obligatorias.
+    Omit-Check 'codex.cmd is not detectable in this environment' $false
   }
 }
 Check 'installer plan is idempotent and WhatIf does not mutate' {
@@ -118,7 +144,8 @@ Check 'python CLI template is independent of the web toolchain' {
         Assert ($LASTEXITCODE -eq 0) 'generated Python tests failed'
       } finally { Pop-Location }
     } else {
-      Write-Host 'SKIP generated Python tests: Python interpreter is unavailable'
+      # Ejecutar los tests generados de Python es obligatorio para verificar esta plantilla.
+      Omit-Check 'Python interpreter is unavailable' $true
     }
     $threw = $false
     try { & (Join-Path $Root 'new-project.ps1') -Name 'sample-cli' -Path $target -Template python-cli | Out-Null } catch { $threw = $true }
@@ -203,5 +230,5 @@ Check 'generated React project carries an actionable visual contract and agent g
     if ($target.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $target)) { Remove-Item -LiteralPath $target -Recurse -Force }
   }
 }
-if ($failed) { exit 1 }
-Write-Host 'All tests passed.'
+Write-Host "Results: PASS=$passed FAIL=$failed BLOCKED=$blocked SKIP=$skipped"
+if ($failed -or $blocked) { exit 1 }

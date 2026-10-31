@@ -84,6 +84,8 @@ Check 'new project respects WhatIf and refuses overwrite' {
     Assert (-not (Test-Path -LiteralPath $target)) 'WhatIf created files'
     & (Join-Path $Root 'new-project.ps1') -Name 'sample-app' -Path $target | Out-Null
     Assert (Test-Path -LiteralPath (Join-Path $target 'src/App.tsx')) 'template missing'
+    Assert (Test-Path -LiteralPath (Join-Path $target 'pnpm-lock.yaml')) 'default lockfile missing'
+    Assert ((Get-Content -LiteralPath (Join-Path $target 'package.json') -Raw | ConvertFrom-Json).name -eq 'sample-app') 'default package name changed'
     $threw = $false
     try { & (Join-Path $Root 'new-project.ps1') -Name 'sample-app' -Path $target | Out-Null } catch { $threw = $true }
     Assert $threw 'existing project overwritten'
@@ -91,6 +93,48 @@ Check 'new project respects WhatIf and refuses overwrite' {
     $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
     if ($target.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $target)) { Remove-Item -LiteralPath $target -Recurse -Force }
   }
+}
+Check 'python CLI template is independent of the web toolchain' {
+  $target = Join-Path ([System.IO.Path]::GetTempPath()) ('adel python test ' + [guid]::NewGuid().ToString('N'))
+  try {
+    $threw = $false
+    try { & (Join-Path $Root 'new-project.ps1') -Name 'sample-cli' -Path $target -Template python-cli -InstallDependencies | Out-Null } catch { $threw = $true }
+    Assert $threw 'Python template accepted dependency installation'
+    Assert (-not (Test-Path -LiteralPath $target)) 'rejected dependency installation created files'
+    & (Join-Path $Root 'new-project.ps1') -Name 'sample-cli' -Path $target -Template python-cli -WhatIf | Out-Null
+    Assert (-not (Test-Path -LiteralPath $target)) 'Python WhatIf created files'
+    & (Join-Path $Root 'new-project.ps1') -Name 'sample-cli' -Path $target -Template python-cli | Out-Null
+    Assert (Test-Path -LiteralPath (Join-Path $target 'main.py')) 'Python entry point missing'
+    Assert (Test-Path -LiteralPath (Join-Path $target 'tests/test_main.py')) 'Python tests missing'
+    foreach ($webFile in @('package.json', 'pnpm-lock.yaml', 'vite.config.ts', 'src/App.tsx')) {
+      Assert (-not (Test-Path -LiteralPath (Join-Path $target $webFile))) "Web artifact copied: $webFile"
+    }
+    $python = Get-Command python.exe, py.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($python) {
+      Push-Location $target
+      try {
+        if ($python.Name -eq 'py.exe') { & $python.Source -3 -m unittest discover -s tests }
+        else { & $python.Source -m unittest discover -s tests }
+        Assert ($LASTEXITCODE -eq 0) 'generated Python tests failed'
+      } finally { Pop-Location }
+    } else {
+      Write-Host 'SKIP generated Python tests: Python interpreter is unavailable'
+    }
+    $threw = $false
+    try { & (Join-Path $Root 'new-project.ps1') -Name 'sample-cli' -Path $target -Template python-cli | Out-Null } catch { $threw = $true }
+    Assert $threw 'existing Python project overwritten'
+  } finally {
+    $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
+    if ($target.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $target)) { Remove-Item -LiteralPath $target -Recurse -Force }
+  }
+}
+Check 'unknown project template is rejected before creating a destination' {
+  $target = Join-Path ([System.IO.Path]::GetTempPath()) ('adel-unknown-test-' + [guid]::NewGuid().ToString('N'))
+  $threw = $false
+  try { & (Join-Path $Root 'new-project.ps1') -Name 'sample-cli' -Path $target -Template unknown | Out-Null }
+  catch { $threw = $_.Exception.Message -match 'ValidateSet|validation|validación|does not belong to the set' }
+  Assert $threw 'unknown template accepted'
+  Assert (-not (Test-Path -LiteralPath $target)) 'unknown template created destination'
 }
 Check 'visual sources are pinned and isolated from minimal' {
   $visual = Get-AdelProfile $manifest 'visual-game'

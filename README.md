@@ -42,7 +42,21 @@ pnpm.cmd run test:run
 pnpm.cmd run build
 ```
 
-El generador se niega a sobrescribir una carpeta existente. `-InstallDependencies` instala solo las dependencias del nuevo proyecto. Para el perfil visual:
+El generador se niega a sobrescribir una carpeta existente. `-InstallDependencies` instala solo las dependencias del nuevo proyecto.
+
+Para crear una herramienta de línea de comandos con Python 3 y solo su biblioteca estándar, seleccioná la plantilla explícitamente:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\new-project.ps1 -Name demo-cli -Path ..\demo-cli -Template python-cli -WhatIf
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\new-project.ps1 -Name demo-cli -Path ..\demo-cli -Template python-cli
+cd ..\demo-cli
+python main.py Ada
+python -m unittest discover -s tests
+```
+
+Sin `-Template`, el generador conserva la plantilla React/Vite/TypeScript. Los identificadores admitidos son `react-vite-ts` y `python-cli`; un identificador desconocido se rechaza. `python-cli` no requiere instalación de dependencias y rechaza `-InstallDependencies`.
+
+Para el perfil visual:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\bootstrap.ps1 -Profile visual-game -WhatIf

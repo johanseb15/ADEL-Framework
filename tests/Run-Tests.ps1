@@ -23,6 +23,13 @@ Check 'versions are compared numerically' {
   Assert ((Compare-AdelVersion 'v24.19.0' '24.15.0') -ge 0) 'new version rejected'
   Assert ((Compare-AdelVersion '2.9.0' '2.10.0') -lt 0) 'lexical comparison used'
 }
+Check 'Codex versions respect manifest minimum' {
+  $minimum = $manifest.tools.codex.minimum
+  Assert ((Compare-AdelVersion '0.164.0' $minimum) -ge 0) 'compatible Codex version rejected'
+  Assert ((Compare-AdelVersion '0.156.0' $minimum) -lt 0) 'inferior Codex version accepted'
+  Assert ((Compare-AdelVersion 'invalid' $minimum) -lt 0) 'invalid Codex version accepted'
+  Assert ((Compare-AdelVersion $null $minimum) -lt 0) 'absent Codex version accepted'
+}
 Check 'doctor distinguishes available limited missing' {
   $probe = @{ git = '2.55.0'; node = '24.19.0'; pnpm = '10.0.0' }
   $result = Get-AdelStatuses $manifest 'minimal' $probe
@@ -30,11 +37,16 @@ Check 'doctor distinguishes available limited missing' {
   Assert ($result.pnpm.status -eq 'LIMITED') 'pnpm wrong'
   Assert ($result.codex.status -eq 'UNAVAILABLE') 'codex wrong'
 }
-Check 'real probe captures version of commands that exit successfully' {
+Check 'real probe captures version of available commands that exit successfully' {
   $probe = Get-AdelProbe $manifest (Join-Path ([System.IO.Path]::GetTempPath()) 'adel-test-probe')
   Assert ($probe.node -match '24\.') 'node version not captured'
   Assert ($probe.pnpm -match '11\.') 'pnpm version not captured'
-  Assert ($probe.codex -match '0\.157\.') 'codex version not captured despite executable'
+  if (Get-Command codex.cmd -ErrorAction SilentlyContinue) {
+    Assert ($probe.codex) 'codex version not captured despite executable'
+    Assert ((Compare-AdelVersion $probe.codex $manifest.tools.codex.minimum) -ge 0) 'codex version below manifest minimum'
+  } else {
+    Write-Host 'SKIP real Codex probe: codex.cmd is not detectable in this environment'
+  }
 }
 Check 'installer plan is idempotent and WhatIf does not mutate' {
   $probe = @{ git = '2.55.0'; node = '24.19.0'; pnpm = '11.9.0'; codex = '0.157.0'; superpowers = '6.4.2' }

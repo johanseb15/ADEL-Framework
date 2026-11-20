@@ -1,3 +1,26 @@
+# ADEL-Framework
+
+> **Ficha de proyecto — Vyntrava | 2026-11-20**
+> Revisión documental del repositorio. Esta ficha no certifica un despliegue ni un estado de producción.
+
+## Para qué sirve
+
+**Framework de ingeniería y recuperación de entorno.** Herramientas PowerShell de bootstrap, diagnóstico y plantillas React/Vite/TypeScript; documenta SPEC/PLAN, gates y decisiones de publicación.
+
+## Estado y límites
+
+La existencia del bootstrap y de las plantillas no garantiza que el entorno de una PC particular haya sido restaurado ni que las pruebas estén verdes.
+
+## Lugar en el portfolio
+
+Activo transversal de desarrollo reutilizable. Mantenerlo independiente de productos concretos.
+
+[Consultar repositorio](https://github.com/johanseb15/ADEL-Framework)
+
+---
+
+> **README técnico original:** se conserva íntegro a continuación.
+
 # ADEL Framework 1.2 — bootstrap para Windows
 
 Repositorio independiente para reconstruir el entorno base de ADEL y crear proyectos React/Vite/TypeScript. No contiene credenciales, cachés de plugins ni configuración personal de Codex.
